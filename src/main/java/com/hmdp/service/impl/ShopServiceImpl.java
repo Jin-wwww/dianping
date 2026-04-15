@@ -15,15 +15,16 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.utils.SystemConstants;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_KEY;
-import static com.hmdp.utils.RedisConstants.CACHE_SHOP_LIST_KEY;
+import static com.hmdp.utils.RedisConstants.*;
 
 /**
  * <p>
@@ -60,7 +61,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         }
         //数据序列化
         //保存到redis中
-        stringRedisTemplate.opsForValue().set(CACHE_SHOP_KEY + id, JSONUtil.toJsonStr(shop));
+        stringRedisTemplate.opsForValue().set(CACHE_SHOP_KEY + id, JSONUtil.toJsonStr(shop),CACHE_SHOP_TTL, TimeUnit.MINUTES);
         return Result.ok(shop);
     }
 
@@ -89,5 +90,19 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         Page<Shop> page = new Page<>(current, SystemConstants.DEFAULT_PAGE_SIZE);
         Page<Shop> result = query().eq("type_id", typeId).page(page);
         return Result.ok(result.getRecords());
+    }
+
+    @Override
+    @Transactional
+    public Result updateShop(Shop shop) {
+        Long id = shop.getId();
+        if (id == null) {
+            return Result.fail("店铺ID不能未空。");
+        }
+        //先更新数据库
+        updateById(shop);
+        //再删除缓存,删除时抛异常的话，需要进行回滚，所以需要配置事务
+        stringRedisTemplate.delete(CACHE_SHOP_KEY + shop.getId());
+        return Result.ok();
     }
 }

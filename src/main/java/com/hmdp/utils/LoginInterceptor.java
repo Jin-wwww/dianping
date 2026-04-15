@@ -18,11 +18,11 @@ import static com.hmdp.utils.RedisConstants.LOGIN_USER_TTL;
 
 public class LoginInterceptor implements HandlerInterceptor {
 
-    private StringRedisTemplate stringRedisTemplate;
-
-    public LoginInterceptor(StringRedisTemplate stringRedisTemplate) {
-        this.stringRedisTemplate = stringRedisTemplate;
-    }
+//    private StringRedisTemplate stringRedisTemplate;
+//
+//    public LoginInterceptor(StringRedisTemplate stringRedisTemplate) {
+//        this.stringRedisTemplate = stringRedisTemplate;
+//    }
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
@@ -32,32 +32,40 @@ public class LoginInterceptor implements HandlerInterceptor {
 //        Object user = session.getAttribute("user");
 
         //获取token
-        String token = request.getHeader("authorization");
-        if (StrUtil.isBlank(token)) {
-            //不存在，拦截
+//        String token = request.getHeader("authorization");
+//        if (StrUtil.isBlank(token)) {
+//            //不存在，拦截
+//            response.setStatus(401);
+//            return false;
+//        }
+//        //根据token获取用户信息
+//        Map<Object, Object> userMap = stringRedisTemplate.opsForHash().entries(LOGIN_USER_KEY + token);
+//        //3.判断用户是否存在
+//        if (userMap.isEmpty()) {
+//        //4.不存在，拦截
+//            response.setStatus(401);
+//            return false;
+//        }
+//        UserDTO userDTO = BeanUtil.fillBeanWithMap(userMap, new UserDTO(), false);
+//        //5.存在，保存用户信息到ThreadLocal
+//        UserHolder.saveUser(userDTO);
+//        //刷新token的有效期
+//        stringRedisTemplate.expire(LOGIN_USER_KEY + token,LOGIN_USER_TTL, TimeUnit.MINUTES);
+//        //6.放行
+//        return true;
+
+        //判断是否需要拦截(根据ThreadLocal中是否有用户）
+        if (UserHolder.getUser()==null) {
+            //没有，需要拦截
             response.setStatus(401);
             return false;
         }
-        //根据token获取用户信息
-        Map<Object, Object> userMap = stringRedisTemplate.opsForHash().entries(LOGIN_USER_KEY + token);
-        //3.判断用户是否存在
-        if (userMap.isEmpty()) {
-        //4.不存在，拦截
-            response.setStatus(401);
-            return false;
-        }
-        UserDTO userDTO = BeanUtil.fillBeanWithMap(userMap, new UserDTO(), false);
-        //5.存在，保存用户信息到ThreadLocal
-        UserHolder.saveUser(userDTO);
-        //刷新token的有效期
-        stringRedisTemplate.expire(LOGIN_USER_KEY + token,LOGIN_USER_TTL, TimeUnit.MINUTES);
-        //6.放行
         return true;
     }
 
-    @Override
-    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
-        //移除用户
-        UserHolder.removeUser();
-    }
+//    @Override
+//    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+//        //移除用户
+//        UserHolder.removeUser();
+//    }
 }

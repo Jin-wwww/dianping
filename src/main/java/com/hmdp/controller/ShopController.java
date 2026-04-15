@@ -33,7 +33,8 @@ public class ShopController {
      */
     @GetMapping("/{id}")
     public Result queryShopById(@PathVariable("id") Long id) {
-        return Result.ok(shopService.getById(id));
+
+        return shopService.queryShopById(id);
     }
 
     /**
@@ -73,11 +74,12 @@ public class ShopController {
             @RequestParam(value = "current", defaultValue = "1") Integer current
     ) {
         // 根据类型分页查询
-        Page<Shop> page = shopService.query()
-                .eq("type_id", typeId)
-                .page(new Page<>(current, SystemConstants.DEFAULT_PAGE_SIZE));
+//        Page<Shop> page = shopService.query()
+//                .eq("type_id", typeId)
+//                .page(new Page<>(current, SystemConstants.DEFAULT_PAGE_SIZE));
         // 返回数据
-        return Result.ok(page.getRecords());
+//        return Result.ok(page.getRecords());
+        return shopService.queryShopByType(typeId,current);
     }
 
     /**

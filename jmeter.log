@@ -1,0 +1,12 @@
+2026-04-29 20:11:34,351 INFO o.a.j.u.JMeterUtils: Setting Locale to en_EN
+2026-04-29 20:11:34,361 INFO o.a.j.JMeter: Loading user properties from: E:\github\apache-jmeter-5.6.3\apache-jmeter-5.6.3\bin\user.properties
+2026-04-29 20:11:34,361 INFO o.a.j.JMeter: Loading system properties from: E:\github\apache-jmeter-5.6.3\apache-jmeter-5.6.3\bin\system.properties
+2026-04-29 20:11:34,362 ERROR o.a.j.JMeter: An error occurred: 
+java.lang.IllegalArgumentException: Unknown arg: E:\github\project\dianping\HTTP Request.jmx
+	at org.apache.jmeter.JMeter.initializeProperties(JMeter.java:796) ~[ApacheJMeter_core.jar:5.6.3]
+	at org.apache.jmeter.JMeter.start(JMeter.java:379) [ApacheJMeter_core.jar:5.6.3]
+	at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method) ~[?:1.8.0_481]
+	at sun.reflect.NativeMethodAccessorImpl.invoke(Unknown Source) ~[?:1.8.0_481]
+	at sun.reflect.DelegatingMethodAccessorImpl.invoke(Unknown Source) ~[?:1.8.0_481]
+	at java.lang.reflect.Method.invoke(Unknown Source) ~[?:1.8.0_481]
+	at org.apache.jmeter.NewDriver.main(NewDriver.java:259) [ApacheJMeter.jar:5.6.3]

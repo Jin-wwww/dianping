@@ -3,6 +3,7 @@ package com.hmdp.service.impl;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -45,27 +46,12 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 
     @Override
     public Result queryShopById(Long id) {
-        //1.从redis中查询商户缓存
-        String shopJson = stringRedisTemplate.opsForValue().get(CACHE_SHOP_KEY + id);
-        //判断是否存在
-        if (StrUtil.isNotBlank(shopJson)) {
-        //命中真实数据，存在返回
-            Shop shop = JSONUtil.toBean(shopJson, Shop.class);
-            return Result.ok(shop);
+//        Shop shop = queryWithPassThrough(id);
+        //互斥锁解决缓存击穿
+        Shop shop = queryWithMutex(id);
+        if (shop == null) {
+            return Result.fail("店铺不存在！");
         }
-        if (shopJson!=null) {
-            //命中空值，返回错误信息
-            return Result.fail("店铺不存在。");
-        }
-
-        //什么都没命中，null，不存在，查询数据库(根据id)
-        Shop shop = getById(id);
-        //数据库中不存在,返回错误
-        if (shop==null) {
-            stringRedisTemplate.opsForValue().set(CACHE_SHOP_KEY + id,CACHE_NULL_KEY,CACHE_NULL_TTL,TimeUnit.MINUTES);
-            return Result.fail("店铺不存在");
-        }
-        //数据序列化
         //保存到redis中
         stringRedisTemplate.opsForValue().set(CACHE_SHOP_KEY + id, JSONUtil.toJsonStr(shop),CACHE_SHOP_TTL, TimeUnit.MINUTES);
         return Result.ok(shop);
@@ -96,6 +82,69 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         Page<Shop> page = new Page<>(current, SystemConstants.DEFAULT_PAGE_SIZE);
         Page<Shop> result = query().eq("type_id", typeId).page(page);
         return Result.ok(result.getRecords());
+    }
+
+    private boolean tryLock(String lockKey) {
+        Boolean flag = stringRedisTemplate.opsForValue().setIfAbsent(lockKey, "1", LOCK_SHOP_TTL, TimeUnit.SECONDS);
+        return BooleanUtil.isTrue(flag);
+    }
+
+    private void unlock(String lockKey) {
+        stringRedisTemplate.delete(lockKey);
+    }
+
+    public Shop queryWithPassThrough(Long id) {
+        String key = CACHE_SHOP_KEY + id;
+        String shopJson = stringRedisTemplate.opsForValue().get(key);
+        if (StrUtil.isNotBlank(shopJson)) {
+            return JSONUtil.toBean(shopJson, Shop.class);
+        }
+        if (shopJson!=null) {
+            return null;
+        }
+        Shop shop = getById(id);
+        if (shop==null) {
+            stringRedisTemplate.opsForValue().set(key,"",CACHE_SHOP_TTL, TimeUnit.MINUTES);
+            return null;
+        }
+        return shop;
+    }
+
+    public Shop queryWithMutex(Long id) {
+        //先尝试从缓存中获取
+        String key = CACHE_SHOP_KEY + id;
+        String shopJson = stringRedisTemplate.opsForValue().get(key);
+        if (StrUtil.isNotBlank(shopJson)) {
+            //存在，直接返回数据
+            return JSONUtil.toBean(shopJson, Shop.class);
+        }
+        //不存在，尝试获取锁
+        Shop shop = null;
+        try {
+            boolean isLock = tryLock(LOCK_SHOP_KEY + id);
+            if (!isLock) {
+                //获取锁失败，休眠再重试
+                Thread.sleep(50);
+                return queryWithMutex(id);
+            }
+            //获取锁成功，到数据库查询数据
+            shop = getById(id);
+            //模拟重建延迟
+            Thread.sleep(200);
+            if (shop==null) {
+                //数据库中没有，将缓存null
+                stringRedisTemplate.opsForValue().set(CACHE_NULL_KEY,"",CACHE_SHOP_TTL, TimeUnit.MINUTES);
+                return null;
+            }
+            //数据库不为空，缓存重建
+            stringRedisTemplate.opsForValue().set(key,JSONUtil.toJsonStr(shop),CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } finally {
+            //释放锁
+            unlock(LOCK_SHOP_KEY + id);
+        }
+        return shop;
     }
 
     @Override

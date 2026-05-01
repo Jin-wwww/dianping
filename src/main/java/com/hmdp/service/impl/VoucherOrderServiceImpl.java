@@ -52,7 +52,10 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return Result.fail("库存不足");
         }
         //扣减库存
-        seckillVoucherService.update().setSql("stock = stock - 1").eq("voucher_id", voucherId).update();
+        seckillVoucherService.update()
+                .setSql("stock = stock - 1")
+                .eq("voucher_id", voucherId).gt("stock", 0)
+                .update();
         //创建订单
         VoucherOrder voucherOrder = new VoucherOrder();
         //订单id:使用全局唯一Id

@@ -9,8 +9,10 @@ import com.hmdp.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.hmdp.service.IVoucherService;
 import com.hmdp.utils.RedisIdWorker;
+import com.hmdp.utils.SimpleRedisLock;
 import com.hmdp.utils.UserHolder;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,6 +36,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Resource
     private RedisIdWorker redisIdWorker;
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
+
     @Override
     public Result seckillVoucher(Long voucherId) {
         //查询优惠券信息
@@ -55,11 +60,24 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
             return Result.fail("库存不足");
         }
         Long userId = UserHolder.getUser().getId();
-        synchronized (userId.toString().intern()) {
+//        synchronized (userId.toString().intern()) {
+        //创建锁对象
+        SimpleRedisLock lock = new SimpleRedisLock("order:"+userId,stringRedisTemplate);
+        //尝试获取锁
+        boolean isLock = lock.tryLock(1200L);
+        if (!isLock) {
+            return Result.fail("不允许重复下单。");
+        }
+        try {
             IVoucherOrderService proxy = (IVoucherOrderService)AopContext.currentProxy();
             //返回订单id
-        return proxy.createVoucherOrder(voucherId);
+            return proxy.createVoucherOrder(voucherId);
+        } catch (IllegalStateException e) {
+            throw new RuntimeException(e);
+        } finally {
+            lock.unlock();
         }
+//        }
     }
 
     @Transactional
@@ -74,10 +92,13 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
         }
 
         //扣减库存
-        seckillVoucherService.update()
+        boolean success = seckillVoucherService.update()
                 .setSql("stock = stock - 1")
                 .eq("voucher_id", voucherId).gt("stock", 0)
                 .update();
+        if (!success) {
+            return Result.fail("库存不足。");
+        }
         //创建订单
         VoucherOrder voucherOrder = new VoucherOrder();
         //订单id:使用全局唯一Id
